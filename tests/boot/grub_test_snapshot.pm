@@ -15,8 +15,6 @@ use testapi;
 sub run() {
     my $self = shift;
 
-    assert_screen "inst-bootmenu";
-    send_key "ret";    # boot
     assert_screen "grub2";
     # prevent grub2 timeout; 'esc' would be cleaner, but grub2-efi falls to the menu then
     send_key 'up';
@@ -24,7 +22,8 @@ sub run() {
         send_key_until_needlematch("boot-menu-snapshot", 'down', 10, 5);
         send_key 'ret';
         # find out the before migration snapshot
-        send_key_until_needlematch("snap-before-update", 'down', 40, 5);
+        send_key_until_needlematch("snap-before-update",    'down', 40, 5) if (get_var("UPGRADE"));
+        send_key_until_needlematch("snap-before-migration", 'down', 40, 5) if (get_var("MIGRATION_ROLLBACK"));
         send_key "ret";
         # bsc#956046  check if we are in first menu-entry, or not
         if (check_screen("boot-menu-snapshot-bootmenu")) {

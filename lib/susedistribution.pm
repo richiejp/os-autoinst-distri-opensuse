@@ -200,9 +200,6 @@ sub init_consoles {
 
     # avoid complex boolean logic by setting interim variables
     if (check_var('BACKEND', 'svirt')) {
-        if (get_var('JEOS')) {
-            set_var('JEOS_SVIRT', 1);
-        }
         if (check_var('ARCH', 's390x')) {
             set_var('S390_ZKVM', 1);
         }
@@ -216,16 +213,17 @@ sub init_consoles {
         $self->add_console('x11',           'tty-console', {tty => 7});
     }
 
-    # JeOS via svirt backend
-    if (get_var('JEOS_SVIRT')) {
+    # svirt backend, except s390x ARCH
+    if (!get_var('S390_ZKVM') and check_var('BACKEND', 'svirt')) {
         my $hostname = get_var('VIRSH_GUEST');
+        my $port = get_var('VIRSH_INSTANCE', 1) + 5900;
 
         $self->add_console(
             'sut',
             'vnc-base',
             {
                 hostname => $hostname,
-                port     => 5901,
+                port     => $port,
                 password => $testapi::password
             });
         $self->add_console('install-shell', 'tty-console', {tty => 2});

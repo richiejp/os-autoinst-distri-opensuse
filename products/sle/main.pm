@@ -51,7 +51,7 @@ sub remove_desktop_needles {
 }
 
 sub is_server() {
-    return get_var('FLAVOR', '') =~ /^Server/;
+    return is_sles4sap() || get_var('FLAVOR', '') =~ /^Server/;
 }
 
 sub is_desktop() {
@@ -68,6 +68,14 @@ sub is_staging () {
 
 sub is_sles4sap () {
     return get_var('FLAVOR', '') =~ /SAP/;
+}
+
+sub is_sles4sap_standard () {
+    return is_sles4sap && check_var('SLES4SAP_MODE', 'sles');
+}
+
+sub is_smt () {
+    return (get_var("PATTERNS", '') || get_var('HDD_1', '')) =~ /smt/;
 }
 
 sub version_at_least;
@@ -180,6 +188,10 @@ unless (get_var('INSTLANG')) {
 # SLE specific variables
 set_var('NOAUTOLOGIN', 1);
 set_var('HASLICENSE',  1);
+
+if (version_at_least('12-SP2')) {
+    set_var('SP2ORLATER', 1);
+}
 
 if (!get_var('NETBOOT')) {
     set_var('DVD', 1);
@@ -500,7 +512,7 @@ sub load_inst_tests() {
     }
     loadtest "installation/addon_products_sle.pm";
     if (noupdatestep_is_applicable) {
-        if (check_var('ARCH', 'x86_64') && version_at_least('12-SP2') && is_server) {
+        if (check_var('ARCH', 'x86_64') && version_at_least('12-SP2') && is_server && (!is_sles4sap || is_sles4sap_standard)) {
             loadtest "installation/system_role.pm";
         }
         loadtest "installation/partitioning.pm";
@@ -765,6 +777,7 @@ sub load_extra_test () {
     loadtest "console/yast2_ntpclient.pm";
     loadtest "console/yast2_tftp.pm";
     loadtest "console/yast2_vnc.pm";
+    loadtest "console/yast2_samba.pm";
     # finished console test and back to desktop
     loadtest "console/consoletest_finish.pm";
 
@@ -775,6 +788,9 @@ sub load_extra_test () {
 sub load_x11tests() {
     return unless (!get_var("INSTALLONLY") && get_var("DESKTOP") !~ /textmode|minimalx/ && !get_var("DUALBOOT") && !get_var("RESCUECD") && !get_var("HACLUSTER"));
 
+    if (is_smt) {
+        loadtest "x11/smt.pm";
+    }
     if (get_var("XDMUSED")) {
         loadtest "x11/x11_login.pm";
     }
@@ -966,6 +982,19 @@ sub load_feature_tests() {
     loadtest "feature/feature_console/suseconnect.pm";
 }
 
+sub load_online_migration_tests() {
+    # stop packagekit service and more
+    loadtest "online_migration/sle12_online_migration/online_migration_setup.pm";
+    loadtest "online_migration/sle12_online_migration/register_system.pm";
+    # do full update before migration
+    # otherwise yast2/zypper migration will patch a minimal update
+    loadtest "online_migration/sle12_online_migration/zypper_patch.pm" if (get_var("FULL_UPDATE"));
+    loadtest "online_migration/sle12_online_migration/pre_migration.pm";
+    loadtest "online_migration/sle12_online_migration/yast2_migration.pm"  if (check_var("MIGRATION_METHOD", 'yast'));
+    loadtest "online_migration/sle12_online_migration/zypper_migration.pm" if (check_var("MIGRATION_METHOD", 'zypper'));
+    loadtest "online_migration/sle12_online_migration/post_migration.pm";
+}
+
 sub prepare_target() {
     if (get_var("BOOT_HDD_IMAGE")) {
         loadtest "boot/boot_to_desktop.pm";
@@ -1097,15 +1126,24 @@ else {
         load_boot_tests();
         load_zdup_tests();
     }
+    elsif (get_var("ONLINE_MIGRATION")) {
+        load_boot_tests();
+        load_online_migration_tests();
+    }
     elsif (get_var("BOOT_HDD_IMAGE")) {
         if (get_var("RT_TESTS")) {
             set_var('INSTALLONLY', 1);
             loadtest "rt/boot_rt_kernel.pm";
         }
         else {
-            if (get_var("BOOT_TO_SNAPSHOT") && (snapper_is_applicable) && get_var("UPGRADE")) {
+            if (get_var("BOOT_TO_SNAPSHOT") && (snapper_is_applicable)) {
                 loadtest "boot/grub_test_snapshot.pm";
-                loadtest "boot/snapper_rollback.pm";
+                if (get_var("UPGRADE")) {
+                    loadtest "boot/snapper_rollback.pm";
+                }
+                if (get_var("MIGRATION_ROLLBACK")) {
+                    loadtest "online_migration/sle12_online_migration/snapper_rollback.pm";
+                }
             }
             else {
                 loadtest "boot/boot_to_desktop.pm";

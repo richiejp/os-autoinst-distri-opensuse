@@ -29,6 +29,12 @@ sub run() {
             return;
         }
         mouse_hide();
+        if (match_has_tag("dm-nousers")) {
+            #no users created during installation, logging in as root
+            send_key 'tab';    #set focus to "Not listed?"
+            send_key 'ret';
+            type_string "root";
+        }
         if (get_var('DM_NEEDS_USERNAME')) {
             type_string $username;
         }
@@ -39,8 +45,12 @@ sub run() {
             assert_and_click "sddm-password-input";
         }
         else {
+            wait_still_screen;
             send_key "ret";
-            wait_idle;
+            if (!check_screen "displaymanager-password-prompt") {
+                record_soft_failure;
+                assert_screen "displaymanager-password-prompt";
+            }
         }
         type_string "$password";
         send_key "ret";
