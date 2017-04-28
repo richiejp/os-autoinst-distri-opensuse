@@ -31,7 +31,7 @@ escape sequences (i.e. a single #) and changes the terminal width.
 sub login {
     die 'Login expects one argument' unless @_ == 1;
     my $user = shift || 'root';
-    my $escseq = qr/(\e [\(\[] [\d\w]{1,2})/x;
+    my $escseq = qr/((\e [\(\[] [\d\w]{1,2}) | \x0f)/x;
 
     bmwqemu::log_call;
 
